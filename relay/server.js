@@ -90,10 +90,7 @@ const agents = new Map();
 // These initial routes are preserved across relay startup, but routes
 // added through the Admin API exist only until the relay restarts.
 // Persistent storage can be added in a later version.
-const tenantRoutes = new Map([
-  ["rgm-transport", "boboye-macbook"],
-  ["demo", "boboye-macbook"],
-]);
+const tenantRoutes = new Map();
 
 // Public HTTP requests waiting for an agent response.
 const pendingRequests = new Map();
@@ -211,7 +208,7 @@ function getTenantRoutes() {
   return routes;
 }
 
-// Temporary helper for the old /t/test1 compatibility route.
+// Returns the first currently connected authenticated agent.
 function getDefaultConnectedAgent() {
   for (const [agentId] of agents.entries()) {
     const agent = getConnectedAgent(agentId);
@@ -286,7 +283,7 @@ function parseJsonRequestBody(req) {
 }
 
 function requireAdminAuthentication(req, res, next) {
-  const receivedSecret = req.get("x-arlymo-admin-secret");
+  const receivedSecret = req.get("x-gtconx-admin-secret");
 
   if (
     !secretsMatch(receivedSecret, TUNNEL_ADMIN_SECRET)
@@ -412,11 +409,7 @@ function forwardRequestToAgent(
   }
 }
 
-app.get("/", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "public-root.html")
-  );
-});
+
 
 app.get("/health", (req, res) => {
   const connectedAgents = getConnectedAgents();
@@ -424,7 +417,7 @@ app.get("/health", (req, res) => {
 
   res.json({
     ok: true,
-    service: "arlymo-tunnel-relay",
+    service: "gtconx-relay",
 
     // Kept temporarily for compatibility with older health checks.
     agentConnected: connectedAgents.length > 0,
@@ -438,7 +431,6 @@ app.get("/health", (req, res) => {
     routing: {
       dynamicAgentRoute: "/t/:agentId",
       tenantRoute: "/tenant/:tenantSlug",
-      compatibilityRoute: "/t/test1",
     },
 
     tenants: {
@@ -589,22 +581,6 @@ app.delete("/admin/routes/:tenantSlug", (req, res) => {
   });
 });
 
-// Temporary compatibility route.
-// This forwards /t/test1 to the first connected agent.
-app.use("/t/test1", (req, res) => {
-  const agent = getDefaultConnectedAgent();
-
-  if (!agent) {
-    return res.status(503).json({
-      ok: false,
-      error:
-        "An authenticated ARLYMO Tunnel Agent is not connected.",
-    });
-  }
-
-  return forwardRequestToAgent(agent, req, res);
-});
-
 // Dynamic route by agent ID.
 app.use("/t/:agentId", (req, res) => {
   const agentId = req.params.agentId;
@@ -631,8 +607,8 @@ app.use("/t/:agentId", (req, res) => {
 // Tenant-aware public route.
 //
 // Examples:
-// /tenant/rgm-transport
-// /tenant/rgm-transport/api/echo
+// /tenant/example
+// /tenant/example/api/echo
 app.use("/tenant/:tenantSlug", (req, res) => {
   const tenantSlug = req.params.tenantSlug;
 
@@ -648,7 +624,7 @@ app.use("/tenant/:tenantSlug", (req, res) => {
   if (!agentId) {
     return res.status(404).json({
       ok: false,
-      error: `No ARLYMO Tunnel route is configured for tenant "${tenantSlug}".`,
+      error: `No GTConX Tunnel route is configured for tenant "${tenantSlug}".`,
     });
   }
 
@@ -664,6 +640,21 @@ app.use("/tenant/:tenantSlug", (req, res) => {
   return forwardRequestToAgent(agent, req, res, {
     tenantSlug,
   });
+});
+
+// Dedicated GTConX public route.
+// All otherwise-unmatched HTTP traffic is forwarded to gtconx-web.
+app.use((req, res) => {
+  const agent = getConnectedAgent("gtconx-web");
+
+  if (!agent) {
+    return res.status(503).json({
+      ok: false,
+      error: 'The GTConX web agent "gtconx-web" is not connected.',
+    });
+  }
+
+  return forwardRequestToAgent(agent, req, res);
 });
 
 wss.on("connection", (socket) => {
@@ -684,7 +675,7 @@ wss.on("connection", (socket) => {
     JSON.stringify({
       type: "welcome",
       message:
-        "Connected to ARLYMO Tunnel Relay. Authentication required.",
+        "Connected to GTConX Relay. Authentication required.",
     })
   );
 
@@ -976,7 +967,7 @@ server.on("close", () => {
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log(
-    `ARLYMO Tunnel Relay running on port ${PORT}`
+    `GTConX Relay running on port ${PORT}`
   );
 
   console.log(
