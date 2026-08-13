@@ -35,7 +35,7 @@
     }
 
     body {
-      min-height: 100vh;
+      min-height: 100svh;
       font-family:
         Inter,
         ui-sans-serif,
@@ -58,7 +58,7 @@
 
     .page {
       width: min(1180px, calc(100% - 48px));
-      min-height: 100vh;
+      min-height: 100svh;
       margin: 0 auto;
       display: flex;
       flex-direction: column;
@@ -174,7 +174,7 @@
     }
 
     .footer {
-      padding: 28px 0 34px;
+      padding: 28px 0 calc(34px + env(safe-area-inset-bottom));
       color: #71849c;
       font-size: 13px;
       display: flex;
@@ -301,8 +301,7 @@
         <p class="subtitle">Ground Transportation Connect</p>
 
         <p class="description">
-          Connecting passengers with local ground transportation providers and
-          helping make local transportation easier to discover.
+          Connecting passengers to a broader network of local ground transportation providers.
         </p>
 
         <div class="accent" aria-hidden="true"></div>
